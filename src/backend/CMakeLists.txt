@@ -4,7 +4,10 @@ add_executable (veloc-backend
 )
 
 # Link the executable to the necessary libraries.
-target_link_libraries (veloc-backend veloc-modules rt)
+target_link_libraries (veloc-backend veloc-modules)
+if (NOT APPLE)
+  target_link_libraries (veloc-backend rt)
+endif()
 
 # Install executables
 install (TARGETS veloc-backend

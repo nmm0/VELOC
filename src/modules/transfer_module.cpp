@@ -3,17 +3,40 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
-#include <sys/sendfile.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <limits.h>
 #include <stdlib.h>
+
+#ifdef __linux__
+#include <sys/sendfile.h>
+#elif defined(__APPLE__)
+#include <sys/socket.h>
+#endif
 
 #include <cerrno>
 #include <cstring>
 
 #define __DEBUG
 #include "common/debug.hpp"
+
+static ssize_t sys_sendfile(int out_fd, int in_fd, off_t *offset, size_t count) {
+#ifdef __linux__
+  return sendfile(out_fd, in_fd, offset, count);
+#elif defined(__APPLE__)
+  off_t len = count;
+  off_t off = offset ? *offset : 0;
+  int ret = sendfile(in_fd, out_fd, off, &len, nullptr, 0);
+  // Need to set offset correctly
+  *offset = off + len;
+  if (0 == ret)
+    return static_cast<ssize_t>(len);
+  else
+    return -1;
+#else
+#error No version of sendfile implemented
+#endif
+}
 
 static int posix_transfer_file(const std::string &source, const std::string &dest) {
     int fi = open(source.c_str(), O_RDONLY);
@@ -31,7 +54,7 @@ static int posix_transfer_file(const std::string &source, const std::string &des
     stat(source.c_str(), &st);
     size_t remaining = st.st_size;
     while (remaining > 0) {
-	ssize_t transferred = sendfile(fo, fi, NULL, remaining);
+	ssize_t transferred = sys_sendfile(fo, fi, NULL, remaining);
 	if (transferred == -1) {
 	    close(fi);
 	    close(fo);
