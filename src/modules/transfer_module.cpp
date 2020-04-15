@@ -24,15 +24,17 @@ static ssize_t sys_sendfile(int out_fd, int in_fd, off_t *offset, size_t count) 
 #ifdef __linux__
   return sendfile(out_fd, in_fd, offset, count);
 #elif defined(__APPLE__)
-  off_t len = count;
-  off_t off = offset ? *offset : 0;
-  int ret = sendfile(in_fd, out_fd, off, &len, nullptr, 0);
-  // Need to set offset correctly
-  *offset = off + len;
-  if (0 == ret)
-    return static_cast<ssize_t>(len);
-  else
+
+  static unsigned char buff[1024*1024];
+  auto rbytes = read(in_fd, buff, 1024*1024);
+  if ( rbytes == -1 )
     return -1;
+
+  auto wbytes = write(out_fd, buff, rbytes);
+  if (rbytes != wbytes)
+    return -1;
+
+  return wbytes;
 #else
 #error No version of sendfile implemented
 #endif
